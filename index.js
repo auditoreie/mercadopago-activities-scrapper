@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer')
 
 const CREDENTIALS = require('./credentials')
-const pages = 10
+const pagesToScrap = 20
 
 const startBrowser = async () => {
 	const browser = await puppeteer.launch({
@@ -80,42 +80,58 @@ const goToNextPage = () => {
 }
 
 const getCurrentPageActivities = async (page) => {
-	const activities = await page.evaluate(() => {
-		// main elements container
-    const row = '.ui-row__link'
-    // elements to be worked on
-    const timeTag = '.c-activity-row__time'
-    const value = '.price-tag'
-    const status = '.c-description-classic__status'
-    const currency = '.price-tag-symbol-text'
-    const description = '.ui-action-row__title'
-    const negativeSymbol = '.price-tag-negative-symbol'
-    const nextPageButton = '.andes-pagination__button--next'
-    // Get all rows
-		const activities = document.querySelectorAll(row)
-		console.log(activities)
-		// Result object
-    var activitiesData = []
-    var currentPage = 1
-    for (i=0; i < activities.length; i++) {
-      console.log('Current page -> ', currentPage)
-      let activityData = {}
-      activityData.time = activities[i].querySelector(timeTag).outerText
-      activityData.description = activities[i].querySelector(description).outerText
-      activityData.currency = activities[i].querySelector(currency).outerText
-      activityData.type = activities[i].querySelector(negativeSymbol)?.outerText ? "debit" : "credit"
-      activityData.value = activities[i].querySelector(value).outerText.split(/\n/gm).slice(1,).join('')
-      activityData.status = activities[i].querySelector(status).outerText
-      activitiesData.push(activityData)
-    }
-		return activitiesData
-	})
+  let currentPage = 1
+  let activities = []
+  const nextPageButton = '.andes-pagination__button--next'
+  const row = '.ui-row__link'
+  while(currentPage < pagesToScrap) {
+    let currentPageActivities = await page.evaluate(() => {
+      // main elements container
+      const row = '.ui-row__link'
+      // elements to be worked on
+      const timeTag = '.c-activity-row__time'
+      const value = '.price-tag'
+      const status = '.c-description-classic__status'
+      const currency = '.price-tag-symbol-text'
+      const description = '.ui-action-row__title'
+      const negativeSymbol = '.price-tag-negative-symbol'
+      // Get all rows
+      const activities = document.querySelectorAll(row)
+      console.log(activities)
+      // Result object
+      var activitiesData = []
+      for (i=0; i < activities.length; i++) {
+        let activityData = {}
+        activityData.time = activities[i].querySelector(timeTag).outerText
+        activityData.description = activities[i].querySelector(description).outerText
+        activityData.currency = activities[i].querySelector(currency).outerText
+        activityData.type = activities[i].querySelector(negativeSymbol)?.outerText ? "debit" : "credit"
+        activityData.value = activities[i].querySelector(value).outerText.split(/\n/gm).slice(1,).join('')
+        activityData.status = activities[i].querySelector(status).outerText
+        activitiesData.push(activityData)
+      }
+      return activitiesData
+    })
+    activities.push(...currentPageActivities)
+    console.log('Current page -> ', currentPage)
+    console.log('Goto Next Page')
+    currentPageActivities = []
+    await page.waitForSelector(nextPageButton)
+    await page.click(nextPageButton)
+    await page.waitForSelector(row)
+    currentPage++
+
+  }
 	return activities
 }
 
 
-// Export to
+// Export section
 const exportCSV = () => {
+
+}
+
+const exportXlsx = () => {
 
 }
 
@@ -134,7 +150,7 @@ const exportCSV = () => {
   // 	}
 	// Now it must get the data
 	const activities = await getCurrentPageActivities(page)
-	console.log(activities)
+	console.log({activities})
 	// browser.close()
 	// process.exit()
 })()
