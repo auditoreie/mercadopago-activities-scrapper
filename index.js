@@ -1,7 +1,10 @@
 const puppeteer = require('puppeteer')
+const fs = require('fs')
+const path = require('path')
 
 const CREDENTIALS = require('./credentials')
 const pagesToScrap = 20
+const EXPORT_PATH = 'output'
 
 const startBrowser = async () => {
 	const browser = await puppeteer.launch({
@@ -68,24 +71,74 @@ const doMercadoPagoLogin = async () => {
 	return { browser, page }
 }
 
-// single element classes (for future reference)
-// const date = 'c-description-compact__time'
-// const description = 'c-description-compact__title'
-// const price = 'c-activity-row__price--compact'
+/**
+ * Parse data to return sanitized data
+ * @param {*} time
+ */
+const parseData = async (time) => {
+  const timeToParse = time.toLowerCase()
+  const today = new Date()
+  const weekdayNumber = today.getDay()
+  const weekdays = [
+    'domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
+    'quinta-feira', 'sexta-feira', 'sábado'
+  ]
+  // Check for atipical words 'ontem e anteontem'
+  if (timeToParse === 'ontem') {
+    return `${today.getDate()-1}/${today.getMonth()}/${today.getFullYear()}`
+  }
 
-// Click on Paginate
-const goToNextPage = () => {
-  console.log('must go to next page')
-  page.click('.andes-pagination__button--next')
+  if (timeToParse === 'anteontem') {
+    return `${today.getDate()-2}/${today.getMonth()}/${today.getFullYear()}`
+  }
+
+  // If time is in digital clock format
+  if (time.indexOf(':') > 0) {
+    return today.toLocaleDateString('pt-BR')
+  }
+
+  // Get day number from today
+  if (weekdays.includes(time.toLowerCase())) {
+    // Check if time exposes a past dayweek
+    const timeWeekdayNumber = weekdays.indexOf(time.toLowerCase())
+    const daysAgo = weekdayNumber > timeWeekdayNumber
+      ? weekdayNumber - timeWeekdayNumber
+      : 7 + weekdayNumber - timeWeekdayNumber
+
+    const timeMonthDay = today.getDate() - daysAgo
+    return `${timeMonthDay}/${today.getMonth()}/${today.getFullYear()}`
+  }
+
+  // Get long date e.g 1 de novembro
+  const regexLongDate = new RegExp(/\d{1,2}\sde\s\w*/)
+  if (regexLongDate.test(time)) {
+    const months = [
+      undefined, 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ]
+    const arrayTime = time.split(' ')
+    arrayTime.splice(1,1)
+    const [ day, month ] = arrayTime
+    const monthNumber = months.indexOf(month.toLowerCase())
+    const timeDate = `${day}/${monthNumber}/2020`
+    return timeDate
+  }
+  return time
 }
 
-const getCurrentPageActivities = async (page) => {
+/**
+ * Start scraping pages
+ * @param {*} page
+ */
+const scrapPages = async (page) => {
   let currentPage = 1
   let activities = []
   const nextPageButton = '.andes-pagination__button--next'
   const row = '.ui-row__link'
+  // Setup inner evaluate functions
+  await page.exposeFunction('parseData', parseData)
   while(currentPage < pagesToScrap) {
-    let currentPageActivities = await page.evaluate(() => {
+    let currentPageActivities = await page.evaluate( async () => {
       // main elements container
       const row = '.ui-row__link'
       // elements to be worked on
@@ -102,7 +155,7 @@ const getCurrentPageActivities = async (page) => {
       var activitiesData = []
       for (i=0; i < activities.length; i++) {
         let activityData = {}
-        activityData.time = activities[i].querySelector(timeTag).outerText
+        activityData.date = await parseData(activities[i].querySelector(timeTag).outerText)
         activityData.description = activities[i].querySelector(description).outerText
         activityData.currency = activities[i].querySelector(currency).outerText
         activityData.type = activities[i].querySelector(negativeSymbol)?.outerText ? "debit" : "credit"
@@ -120,14 +173,21 @@ const getCurrentPageActivities = async (page) => {
     await page.click(nextPageButton)
     await page.waitForSelector(row)
     currentPage++
-
   }
 	return activities
 }
 
+/**
+ * Convert to CSV
+ */
+const convertJsonToCsv = (jsonObject) => {
 
-// Export section
-const exportCSV = () => {
+}
+
+/**
+ * Save data to CSV in export path
+ */
+const saveToCSV = () => {
 
 }
 
@@ -149,8 +209,9 @@ const exportXlsx = () => {
   // 		await page.click('.activity-row-toggle__button')
   // 	}
 	// Now it must get the data
-	const activities = await getCurrentPageActivities(page)
+	const activities = await scrapPages(page)
 	console.log({activities})
 	// browser.close()
 	// process.exit()
 })()
+
