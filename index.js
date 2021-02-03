@@ -3,17 +3,17 @@ const fs = require('fs')
 const path = require('path')
 
 const CREDENTIALS = require('./credentials')
-const pagesToScrap = 20
+const pagesToScrap = 30
 const EXPORT_PATH = 'output'
 
 const startBrowser = async () => {
 	const browser = await puppeteer.launch({
-    headless: false,
-    devtools: true,
-    executablePath:
-	  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		headless: false,
+		devtools: true,
+		executablePath:
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 	userDataDir: './cache'
-  });
+	});
 	const page = await browser.newPage()
 	await page.setViewport({width: 1366, height: 768})
 	return { browser, page }
@@ -76,54 +76,54 @@ const doMercadoPagoLogin = async () => {
  * @param {*} time
  */
 const parseData = async (time) => {
-  const timeToParse = time.toLowerCase()
-  const today = new Date()
-  const weekdayNumber = today.getDay()
-  const weekdays = [
-    'domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
-    'quinta-feira', 'sexta-feira', 'sábado'
-  ]
-  // Check for atipical words 'ontem e anteontem'
-  if (timeToParse === 'ontem') {
-    return `${today.getDate()-1}/${today.getMonth()}/${today.getFullYear()}`
-  }
+	const timeToParse = time.toLowerCase()
+	const today = new Date()
+	const weekdayNumber = today.getDay()
+	const weekdays = [
+		'domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
+		'quinta-feira', 'sexta-feira', 'sábado'
+	]
+	// Check for atipical words 'ontem e anteontem'
+	if (timeToParse === 'ontem') {
+		return `${today.getDate()-1}/${today.getMonth()}/${today.getFullYear()}`
+	}
 
-  if (timeToParse === 'anteontem') {
-    return `${today.getDate()-2}/${today.getMonth()}/${today.getFullYear()}`
-  }
+	if (timeToParse === 'anteontem') {
+		return `${today.getDate()-2}/${today.getMonth()}/${today.getFullYear()}`
+	}
 
-  // If time is in digital clock format
-  if (time.indexOf(':') > 0) {
-    return today.toLocaleDateString('pt-BR')
-  }
+	// If time is in digital clock format
+	if (time.indexOf(':') > 0) {
+		return today.toLocaleDateString('pt-BR')
+	}
 
-  // Get day number from today
-  if (weekdays.includes(time.toLowerCase())) {
-    // Check if time exposes a past dayweek
-    const timeWeekdayNumber = weekdays.indexOf(time.toLowerCase())
-    const daysAgo = weekdayNumber > timeWeekdayNumber
-      ? weekdayNumber - timeWeekdayNumber
-      : 7 + weekdayNumber - timeWeekdayNumber
+	// Get day number from today
+	if (weekdays.includes(time.toLowerCase())) {
+		// Check if time exposes a past dayweek
+		const timeWeekdayNumber = weekdays.indexOf(time.toLowerCase())
+		const daysAgo = weekdayNumber > timeWeekdayNumber
+			? weekdayNumber - timeWeekdayNumber
+			: 7 + weekdayNumber - timeWeekdayNumber
 
-    const timeMonthDay = today.getDate() - daysAgo
-    return `${timeMonthDay}/${today.getMonth()}/${today.getFullYear()}`
-  }
+		const timeMonthDay = today.getDate() - daysAgo
+		return `${timeMonthDay}/${today.getMonth()}/${today.getFullYear()}`
+	}
 
-  // Get long date e.g 1 de novembro
-  const regexLongDate = new RegExp(/\d{1,2}\sde\s\w*/)
-  if (regexLongDate.test(time)) {
-    const months = [
-      undefined, 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
-    ]
-    const arrayTime = time.split(' ')
-    arrayTime.splice(1,1)
-    const [ day, month ] = arrayTime
-    const monthNumber = months.indexOf(month.toLowerCase())
-    const timeDate = `${day}/${monthNumber}/2020`
-    return timeDate
-  }
-  return time
+	// Get long date e.g 1 de novembro
+	const regexLongDate = new RegExp(/\d{1,2}\sde\s\w*/)
+	if (regexLongDate.test(time)) {
+		const months = [
+			undefined, 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+			'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+		]
+		const arrayTime = time.split(' ')
+		arrayTime.splice(1,1)
+		const [ day, month ] = arrayTime
+		const monthNumber = months.indexOf(month.toLowerCase())
+		const timeDate = `${day}/${monthNumber}/2020`
+		return timeDate
+	}
+	return time
 }
 
 /**
@@ -131,87 +131,128 @@ const parseData = async (time) => {
  * @param {*} page
  */
 const scrapPages = async (page) => {
-  let currentPage = 1
-  let activities = []
-  const nextPageButton = '.andes-pagination__button--next'
-  const row = '.ui-row__link'
-  // Setup inner evaluate functions
-  await page.exposeFunction('parseData', parseData)
-  while(currentPage < pagesToScrap) {
-    let currentPageActivities = await page.evaluate( async () => {
-      // main elements container
-      const row = '.ui-row__link'
-      // elements to be worked on
-      const timeTag = '.c-activity-row__time'
-      const value = '.price-tag'
-      const status = '.c-description-classic__status'
-      const currency = '.price-tag-symbol-text'
-      const description = '.ui-action-row__title'
-      const negativeSymbol = '.price-tag-negative-symbol'
-      // Get all rows
-      const activities = document.querySelectorAll(row)
-      console.log(activities)
-      // Result object
-      var activitiesData = []
-      for (i=0; i < activities.length; i++) {
-        let activityData = {}
-        activityData.date = await parseData(activities[i].querySelector(timeTag).outerText)
-        activityData.description = activities[i].querySelector(description).outerText
-        activityData.currency = activities[i].querySelector(currency).outerText
-        activityData.type = activities[i].querySelector(negativeSymbol)?.outerText ? "debit" : "credit"
-        activityData.value = activities[i].querySelector(value).outerText.split(/\n/gm).slice(1,).join('')
-        activityData.status = activities[i].querySelector(status).outerText
-        activitiesData.push(activityData)
-      }
-      return activitiesData
-    })
-    activities.push(...currentPageActivities)
-    console.log('Current page -> ', currentPage)
-    console.log('Goto Next Page')
-    currentPageActivities = []
-    await page.waitForSelector(nextPageButton)
-    await page.click(nextPageButton)
-    await page.waitForSelector(row)
-    currentPage++
-  }
+	let currentPage = 1
+	let activities = []
+	const nextPageButton = '.andes-pagination__button--next'
+	const row = '.ui-row__link'
+	// Setup inner evaluate functions
+	await page.exposeFunction('parseData', parseData)
+	while(currentPage < pagesToScrap) {
+		let currentPageActivities = await page.evaluate( async () => {
+			// main elements container
+			const row = '.ui-row__link'
+			// elements to be worked on
+			const timeTag = '.c-activity-row__time'
+			const value = '.price-tag'
+			const status = '.c-description-classic__status'
+			const currency = '.price-tag-symbol-text'
+			const description = '.ui-action-row__title'
+			const negativeSymbol = '.price-tag-negative-symbol'
+			// Get all rows
+			const activities = document.querySelectorAll(row)
+			console.log(activities)
+			// Result object
+			var activitiesData = []
+			for (i=0; i < activities.length; i++) {
+				let activityData = {}
+				activityData.date = await parseData(activities[i].querySelector(timeTag).outerText)
+				activityData.description = activities[i].querySelector(description).outerText
+				activityData.currency = activities[i].querySelector(currency).outerText
+				activityData.type = activities[i].querySelector(negativeSymbol)?.outerText ? "debit" : "credit"
+				activityData.value = activities[i].querySelector(value).outerText.split(/\n/gm).slice(1,).join('')
+				activityData.status = activities[i].querySelector(status).outerText
+				activitiesData.push(activityData)
+			}
+			return activitiesData
+		})
+		activities.push(...currentPageActivities)
+		console.log('Current page -> ', currentPage)
+		console.log('Goto Next Page')
+		currentPageActivities = []
+		await page.waitForSelector(nextPageButton)
+		await page.click(nextPageButton)
+		await page.waitForSelector(row)
+		currentPage++
+	}
 	return activities
 }
 
-/**
- * Convert to CSV
- */
-const convertJsonToCsv = (jsonObject) => {
+const convertJsonToCsv = (jsonObj) => {
+  const finalCsv  = ['"Data";"Valor";"Descrição"']
+  let skippedCount = 0
+  jsonObj.forEach(item => {
+    const  { date, value, description } = item
+    if(date.split('/')[0] < 0) {
+      skippedCount ++
+      return
+    }
+    const currentItem = [date, value, description].join(';')
+    finalCsv.push(currentItem)
+  })
+  console.log('Skipped ', skippedCount)
 
+  return finalCsv
 }
 
-/**
- * Save data to CSV in export path
- */
-const saveToCSV = () => {
+const convertArrayToString = (arrayData) => arrayData.join('\n')
 
+const saveCsvToFile = (fileContent) => {
+  try {
+    return fs.writeFileSync('./output/final.csv', fileContent)
+  } catch(e) {
+    throw e
+  }
 }
 
-const exportXlsx = () => {
-
+const getTimeStamp = () => {
+  const now = new Date();
+  const [ day, month, year, hours, minutes ] = [
+    now.getDay(), now.getMonth(), now.getFullYear(),
+    now.getHours(), now.getMinutes()
+  ]
+  return `${year}.${month}.${day}.${hours}${minutes}`
 }
 
+const readJsonFile = () => {
+  return data = require('./output/mercadopago_export2021.1.3.458.json')
+}
+
+const saveJsonToFile = (jsonObj) => {
+  try {
+    const savePath = path.join(__dirname, EXPORT_PATH)
+    const timestamp = getTimeStamp()
+    const fileName = `mercadopago_export${timestamp}.json`
+    fs.writeFileSync(`${savePath}/${fileName}`, JSON.stringify(jsonObj))
+  } catch(e) {
+    throw(e)
+  }
+}
+
+  console.log('Initializing second step')
+  const fileData = readJsonFile()
+  const arrayData = convertJsonToCsv(fileData)
+  const result = convertArrayToString(arrayData)
+  saveCsvToFile(result)
+  
+  
 
 
-( async () => {
-	console.log('Project started')
-	const { browser, page } = await doMercadoPagoLogin()
-	await page.waitForSelector("a>span.nav-icon-activities")
-	await page.click("a>span.nav-icon-activities")
-	// Check if it is compact
-	await page.waitForSelector('a.ui-row__link')
-  // 	if (await page.$('.ui-row__col.ui-row__col--heading')) {
-  //
-  // 		await page.click('.activity-row-toggle__button')
-  // 	}
-	// Now it must get the data
-	const activities = await scrapPages(page)
-	console.log({activities})
-	// browser.close()
-	// process.exit()
-})()
+// ( async () => {
+// 	console.log('Project started')
+// 	const { browser, page } = await doMercadoPagoLogin()
+// 	await page.waitForSelector("a>span.nav-icon-activities")
+// 	await page.click("a>span.nav-icon-activities")
+// 	// Check if it is compact
+// 	await page.waitForSelector('a.ui-row__link')
+// 	//	if (await page.$('.ui-row__col.ui-row__col--heading')) {
+// 	//
+// 	//		await page.click('.activity-row-toggle__button')
+// 	//	}
+// 	// Now it must get the data
+// 	const activities = await scrapPages(page)
+//   saveJsonToFile(activities)
+// 	browser.close()
+// 	process.exit()
+// })()
+
 
