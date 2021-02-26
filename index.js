@@ -8,7 +8,7 @@ const EXPORT_PATH = 'output'
 
 const startBrowser = async () => {
 	const browser = await puppeteer.launch({
-		headless: false,
+		headless: true,
 		devtools: true,
 		executablePath:
 		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -178,7 +178,7 @@ const scrapPages = async (page) => {
 }
 
 const convertJsonToCsv = (jsonObj) => {
-  const finalCsv  = ['"Data";"Valor";"Descrição"']
+  const finalCsv = []
   let skippedCount = 0
   jsonObj.forEach(item => {
     const  { date, value, description } = item
@@ -196,9 +196,12 @@ const convertJsonToCsv = (jsonObj) => {
 
 const convertArrayToString = (arrayData) => arrayData.join('\n')
 
-const saveCsvToFile = (fileContent) => {
+const saveCsvToFile = (fileContentArray) => {
   try {
-    return fs.writeFileSync('./output/final.csv', fileContent)
+    fileContentArray.forEach((fileContent, index) => {
+      const stringContent = convertArrayToString(fileContent)
+      return fs.writeFileSync(`./output/final-${index}.csv`, stringContent)
+    })
   } catch(e) {
     throw e
   }
@@ -213,46 +216,67 @@ const getTimeStamp = () => {
   return `${year}.${month}.${day}.${hours}${minutes}`
 }
 
-const readJsonFile = () => {
-  return data = require('./output/mercadopago_export2021.1.3.458.json')
+const readJsonFile = (fileFullPath) => {
+  return data = require(fileFullPath)
 }
 
-const saveJsonToFile = (jsonObj) => {
+const saveJsonToFile = async (jsonObj) => {
   try {
     const savePath = path.join(__dirname, EXPORT_PATH)
     const timestamp = getTimeStamp()
     const fileName = `mercadopago_export${timestamp}.json`
-    fs.writeFileSync(`${savePath}/${fileName}`, JSON.stringify(jsonObj))
+    const fullSavePath = `${savePath}/${fileName}`
+    fs.writeFileSync(fullSavePath, JSON.stringify(jsonObj))
+    return fullSavePath
   } catch(e) {
     throw(e)
   }
 }
 
+const splitDataInChunks = async (arrayData) => {
+  try {
+    console.log(arrayData)
+    const chunkSize = 499
+    const header = ['"Data";"Valor";"Descrição"']
+    const chunks = []
+    while(arrayData.length > 0) {
+      const chunk = [
+        header,
+        ...arrayData.splice(0, chunkSize)
+      ]
+      chunks.push(chunk)
+    }
+    return chunks
+  } catch (e) {
+    console.log(e)
+  }
+}
+
+
+( async () => {
+	console.log('Project started')
+	const { browser, page } = await doMercadoPagoLogin()
+	await page.waitForSelector("a>span.nav-icon-activities")
+	await page.click("a>span.nav-icon-activities")
+	// Check if it is compact
+	await page.waitForSelector('a.ui-row__link')
+	//	if (await page.$('.ui-row__col.ui-row__col--heading')) {
+	//
+	//		await page.click('.activity-row-toggle__button')
+	//	}
+	// Now it must get the data
+	const activities = await scrapPages(page)
+  console.log(activities.length)
+	browser.close()
+
   console.log('Initializing second step')
-  const fileData = readJsonFile()
-  const arrayData = convertJsonToCsv(fileData)
-  const result = convertArrayToString(arrayData)
-  saveCsvToFile(result)
+  await saveJsonToFile(activities)
+  const arrayData = convertJsonToCsv(activities)
+  const arrayChunks = await splitDataInChunks(arrayData)
+  console.log(arrayChunks.length)
+  saveCsvToFile(arrayChunks)
   
-  
-
-
-// ( async () => {
-// 	console.log('Project started')
-// 	const { browser, page } = await doMercadoPagoLogin()
-// 	await page.waitForSelector("a>span.nav-icon-activities")
-// 	await page.click("a>span.nav-icon-activities")
-// 	// Check if it is compact
-// 	await page.waitForSelector('a.ui-row__link')
-// 	//	if (await page.$('.ui-row__col.ui-row__col--heading')) {
-// 	//
-// 	//		await page.click('.activity-row-toggle__button')
-// 	//	}
-// 	// Now it must get the data
-// 	const activities = await scrapPages(page)
-//   saveJsonToFile(activities)
-// 	browser.close()
-// 	process.exit()
-// })()
+	process.exit()
+})()
 
 
