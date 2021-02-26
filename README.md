@@ -10,7 +10,8 @@ This scrapper was created for learning purposes and to get relevant data about t
 [x] Scrap Single page
 [x] Scrap multiple pages
 [x] Sanitize date
-[ ] Save to CSV
-[ ] Save to XLSX
-[ ] Save to googleSheets
+[x] Save to CSV
+[x] Import to mercadopago
+[ ] Fix duplicates
+[ ] Some values are missing in the result
 
