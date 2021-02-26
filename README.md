@@ -14,4 +14,4 @@ This scrapper was created for learning purposes and to get relevant data about t
 [x] Import to mercadopago
 [ ] Fix duplicates
 [ ] Some values are missing in the result
-
+[ ] Convert credentials to .env files [URGENT]
