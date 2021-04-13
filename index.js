@@ -2,26 +2,31 @@ const puppeteer = require('puppeteer')
 const fs = require('fs')
 const path = require('path')
 
-const CREDENTIALS = require('./credentials')
-const pagesToScrap = 30
+const pagesToScrap = 29
 const EXPORT_PATH = 'output'
 
 const startBrowser = async () => {
 	const browser = await puppeteer.launch({
 		headless: true,
 		devtools: true,
-		executablePath:
-		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 	userDataDir: './cache'
 	});
 	const page = await browser.newPage()
-	await page.setViewport({width: 1366, height: 768})
+	await page.setViewport({width: 1440, height: 768})
 	return { browser, page }
 }
 
 const closeBrowser = (browser) => {
 	return browser.close()
 }
+
+// Page elements
+const loginPageButton = '.nav-header-guest__link--login'
+const usernameInput = '[name=\'user_id\']'
+const passwordInput = '[name=\'password\']'
+const smsButton = '#channel-sms'
+
+
 
 const doMercadoPagoLogin = async () => {
 	const { browser, page } = await startBrowser()
@@ -35,27 +40,27 @@ const doMercadoPagoLogin = async () => {
 		return { browser, page }
 	}
 	//click login selector
-	await page.waitForSelector(".option-login")
-	await page.click(".option-login")
+	await page.waitForSelector(loginPageButton)
+	await page.click(loginPageButton)
 	await page.waitForNavigation()
 	//enter login from credentials
-	await page.waitForSelector("[name='user_id']")
-	await page.focus("[name='user_id']")
-	await page.keyboard.type(CREDENTIALS.username)
+	await page.waitForSelector(usernameInput)
+	await page.focus(usernameInput)
+	await page.keyboard.type(process.env.MERCADO_USERNAME)
 	await page.keyboard.down('Enter')
 	await page.waitForNavigation()
 	//click password selector
 	//enter password from credentials
-	await page.waitForSelector("[name='password']")
-	await page.focus("[name='password']")
-	await page.keyboard.type(CREDENTIALS.password)
+	await page.waitForSelector(passwordInput)
+	await page.focus(passwordInput)
+	await page.keyboard.type(process.env.MERCADO_PASSWORD)
 	await page.keyboard.down('Enter')
 	//click login button
 	await page.waitForNavigation()
 	//await for the code
-	await page.waitForSelector('#channel-sms')
-	await page.click('#channel-sms')
-	await  page.waitForNavigation()
+	await page.waitForSelector(smsButton)
+	await page.click(smsButton)
+	await page.waitForNavigation()
 	console.log('Must call the dialog right now');
 	await page.waitForSelector('input')
 	await page.on('dialog', async dialog => {
@@ -85,11 +90,11 @@ const parseData = async (time) => {
 	]
 	// Check for atipical words 'ontem e anteontem'
 	if (timeToParse === 'ontem') {
-		return `${today.getDate()-1}/${today.getMonth()}/${today.getFullYear()}`
+		return `${today.getDate()-1}/${today.getMonth()+1}/${today.getFullYear()}`
 	}
 
 	if (timeToParse === 'anteontem') {
-		return `${today.getDate()-2}/${today.getMonth()}/${today.getFullYear()}`
+		return `${today.getDate()-2}/${today.getMonth()+1}/${today.getFullYear()}`
 	}
 
 	// If time is in digital clock format
@@ -106,7 +111,7 @@ const parseData = async (time) => {
 			: 7 + weekdayNumber - timeWeekdayNumber
 
 		const timeMonthDay = today.getDate() - daysAgo
-		return `${timeMonthDay}/${today.getMonth()}/${today.getFullYear()}`
+		return `${timeMonthDay}/${today.getMonth()+1}/${today.getFullYear()}`
 	}
 
 	// Get long date e.g 1 de novembro
@@ -120,7 +125,7 @@ const parseData = async (time) => {
 		arrayTime.splice(1,1)
 		const [ day, month ] = arrayTime
 		const monthNumber = months.indexOf(month.toLowerCase())
-		const timeDate = `${day}/${monthNumber}/2020`
+		const timeDate = `${day}/${monthNumber}/2021`
 		return timeDate
 	}
 	return time
@@ -138,6 +143,7 @@ const scrapPages = async (page) => {
 	// Setup inner evaluate functions
 	await page.exposeFunction('parseData', parseData)
 	while(currentPage < pagesToScrap) {
+		await page.waitForSelector(row)
 		let currentPageActivities = await page.evaluate( async () => {
 			// main elements container
 			const row = '.ui-row__link'
@@ -153,8 +159,8 @@ const scrapPages = async (page) => {
 			console.log(activities)
 			// Result object
 			var activitiesData = []
-			for (i=0; i < activities.length; i++) {
-				let activityData = {}
+			for (let i=0; i < activities.length; i++) {
+				const activityData = {}
 				activityData.date = await parseData(activities[i].querySelector(timeTag).outerText)
 				activityData.description = activities[i].querySelector(description).outerText
 				activityData.currency = activities[i].querySelector(currency).outerText
@@ -169,10 +175,9 @@ const scrapPages = async (page) => {
 		console.log('Current page -> ', currentPage)
 		console.log('Goto Next Page')
 		currentPageActivities = []
+		currentPage++
 		await page.waitForSelector(nextPageButton)
 		await page.click(nextPageButton)
-		await page.waitForSelector(row)
-		currentPage++
 	}
 	return activities
 }
@@ -256,15 +261,8 @@ const splitDataInChunks = async (arrayData) => {
 ( async () => {
 	console.log('Project started')
 	const { browser, page } = await doMercadoPagoLogin()
-	await page.waitForSelector("a>span.nav-icon-activities")
-	await page.click("a>span.nav-icon-activities")
-	// Check if it is compact
-	await page.waitForSelector('a.ui-row__link')
-	//	if (await page.$('.ui-row__col.ui-row__col--heading')) {
-	//
-	//		await page.click('.activity-row-toggle__button')
-	//	}
-	// Now it must get the data
+	await page.goto('https://www.mercadopago.com.br/banking/balance/activities')
+	// await page.waitForNavigation()
 	const activities = await scrapPages(page)
   console.log(activities.length)
 	browser.close()
