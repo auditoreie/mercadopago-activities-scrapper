@@ -257,24 +257,37 @@ const splitDataInChunks = async (arrayData) => {
   }
 }
 
+const getApiDirectData = async () => {
+	const axios = require('axios')
+	const url = 'https://www.mercadopago.com.br/banking/balance/api/activities?limit=10&offset=500'
+	const response = await axios.get(url, { withCredentials: true })
+    console.log(response)
+	const json = await response.json()
+	console.log(json)
+	return response
+}
+
 
 ( async () => {
 	console.log('Project started')
 	const { browser, page } = await doMercadoPagoLogin()
+	const apiData = await getApiDirectData()
+
 	await page.goto('https://www.mercadopago.com.br/banking/balance/activities')
+
 	// await page.waitForNavigation()
-	const activities = await scrapPages(page)
-  console.log(activities.length)
-	browser.close()
+	// const activities = await scrapPages(page)
+  // console.log(activities.length)
+	// browser.close()
 
   console.log('Initializing second step')
-  await saveJsonToFile(activities)
-  const arrayData = convertJsonToCsv(activities)
-  const arrayChunks = await splitDataInChunks(arrayData)
-  console.log(arrayChunks.length)
-  saveCsvToFile(arrayChunks)
+  // await saveJsonToFile(activities)
+  // const arrayData = convertJsonToCsv(activities)
+  // const arrayChunks = await splitDataInChunks(arrayData)
+  // console.log(arrayChunks.length)
+  // saveCsvToFile(arrayChunks)
   
-	process.exit()
+	// process.exit()
 })()
 
 
